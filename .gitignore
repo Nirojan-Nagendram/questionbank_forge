@@ -1,0 +1,22 @@
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Python files
+test.py
+utility.py
+config.py
+
+# Source PDFs (contents ignored, folder kept via .gitkeep)
+pdf_folder/*
+!pdf_folder/.gitkeep
+
+# Generated question images (contents ignored, folder kept via .gitkeep)
+images/*
+!images/.gitkeep
+
+# Scratch output
+output.txt
