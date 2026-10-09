@@ -1,12 +1,12 @@
 import pymupdf
 from utility import (
     footer_cutoff,
-    header_cutoff,
     left_margin,
     question_marker,
     gap,
     SKIP_PAGE_ONE,
 )
+from models import Question
 
 open("output.txt", "w", encoding="utf8").close()
 
@@ -59,7 +59,16 @@ def store_region(current_region):
     return (page, y_start_list, y_end_list)
 
 
+""" regions currently outputs [()] so format unpacks it and groups same questions in a list."""
+
+
+def format_data(regions):
+    all_pieces = [list(zip(*q, strict=True)) for q in regions]
+    return all_pieces
+
+
 def run_splitter(doc):
+    questions = []
     number = []
     regions = []
     current_region = []  # text start, page number(s), y start(s), y end(s)
@@ -114,11 +123,12 @@ def run_splitter(doc):
                         )
                     )
 
-                number.append(w[4])
+                number.append(prev_start[3])
                 regions.append(store_region(current_region))
                 write_output(current_region)
                 current_region = []
-            prev_start = (page_idx, y_start, page)
+            """ idx, start, end, text"""
+            prev_start = (page_idx, y_start, page, w[4])
 
         if prev_start is not None:
             start = prev_start[1] if prev_start[0] == page_idx else top_word
@@ -132,16 +142,24 @@ def run_splitter(doc):
             )
     # last question is written no matter what
     if current_region:
-        number.append(w[4])
+        assert prev_start is not None
+        number.append(prev_start[3])
         regions.append(store_region(current_region))
         write_output(current_region)
     # doc.close()
-    return number, regions
+    data = zip(number, format_data(regions))
+
+    for no, regions in data:
+        questions.append(Question(no, regions))
+    return questions
 
 
 if __name__ == "__main__":
     from utility import doc
 
-    number, regions = run_splitter(doc)
-    print(doc)
-    print(f"q_no: {number}, regions : {regions}")
+    question_list = run_splitter(doc)
+
+    print(f"\n {doc}")
+    for q in question_list:
+        print(q)
+        # print(f"q_no: {q.number},\nregions : {q.regions}")

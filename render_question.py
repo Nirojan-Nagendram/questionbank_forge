@@ -10,14 +10,6 @@ def make_fold(folder):
         os.mkdir(path)
 
 
-""" question splitter currently outputs [()] so format unpacks it and groups same questions in a list."""
-
-
-def format_data(regions):
-    all_pieces = [list(zip(*q, strict=True)) for q in regions]
-    return all_pieces
-
-
 def combine_parts(pix_list):  # list of pxl maps of question parts
     image_list = []
     for pix in pix_list:
@@ -34,15 +26,16 @@ def combine_parts(pix_list):  # list of pxl maps of question parts
     return combined
 
 
-""" Currently overrides page spanning questions (q7 pmt)"""
+"""Currently overrides page spanning questions"""
 
 
-def clip_question(question_pieces, path, document):
+def clip_question(question_list, path, document):
+    combined = None
     questions = []
     question_parts = []
-    """Testing with paths"""
-    for q_no, pieces in enumerate(question_pieces):
-        for piece_no, (page_idx, y0, y1) in enumerate(pieces):
+    for q in question_list:
+        pieces = q.regions
+        for page_idx, y0, y1 in pieces:
             page = document[page_idx]
             clip = pymupdf.Rect(x0=0, y0=y0, x1=page.rect.width, y1=y1)
 
@@ -50,20 +43,19 @@ def clip_question(question_pieces, path, document):
             picture = page.get_pixmap(clip=clip, dpi=150)
             question_parts.append(picture)
         combined = combine_parts(question_parts)
-        combined.save(f"images/{path}/question{q_no+1}.png")
+        print(combined.height)
+        q.path = f"images/{path}/question{q.number.rstrip('.')}.png"
+        combined.save(q.path)
+        q.width, q.height = combined.size
         questions.append(combined)
         question_parts = []
-    return combined
+    return questions
 
 
-def render_question(regions, folder_name, document):
+def render_question(question_list, folder_name, document):
     make_fold(folder_name)
-    all_pieces = format_data(regions)
-    data = clip_question(all_pieces, folder_name, document)
-    print(data)
+    data = clip_question(question_list, folder_name, document)
 
 
 if __name__ == "__main__":
-    from main import regions, worksheet_name, document
-
-    render_question(regions, worksheet_name, document)
+    pass

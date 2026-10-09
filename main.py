@@ -1,6 +1,12 @@
 from pathlib import Path
 import pymupdf
-from utility import root
+try:
+    from utility import root
+except ImportError as e:
+    raise SystemExit(
+        f"{e}\nSetup needed: copy config.example.py -> config.py and "
+        "utility.example.py -> utility.py (see README, 'How to run')."
+    )
 from question_splitter import run_splitter
 from render_question import render_question
 
@@ -16,8 +22,8 @@ def file_namer(pdf_path):
 
 def run_on_page(pdf_path, document):
     worksheet_name = file_namer(pdf_path)
-    regions = run_splitter(document)
-    render_question(regions, worksheet_name, document)
+    question_list = run_splitter(document)
+    render_question(question_list, worksheet_name, document)
 
 
 """ Loop through all worksheets in folder.
