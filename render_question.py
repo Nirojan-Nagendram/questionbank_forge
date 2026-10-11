@@ -43,7 +43,6 @@ def clip_question(question_list, path, document):
             picture = page.get_pixmap(clip=clip, dpi=150)
             question_parts.append(picture)
         combined = combine_parts(question_parts)
-        print(combined.height)
         q.path = f"images/{path}/question{q.number.rstrip('.')}.png"
         combined.save(q.path)
         q.width, q.height = combined.size
@@ -54,7 +53,7 @@ def clip_question(question_list, path, document):
 
 def render_question(question_list, folder_name, document):
     make_fold(folder_name)
-    data = clip_question(question_list, folder_name, document)
+    clip_question(question_list, folder_name, document)
 
 
 if __name__ == "__main__":

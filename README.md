@@ -44,11 +44,18 @@ Teachers will use it through a React web application, so it's easy to use from a
 - The renderer fills in each question's image path, width and height when it saves the PNG. It also now returns every question image, where before it only returned the last one.
 - Next: get the questions into a database.
 
+11/10:
+- Added `db.py`, which stores each question in a SQLite database (`questions.db`) using Python's built-in `sqlite3`. Each row holds the source PDF, question number, regions (as JSON) and the image path, with a `UNIQUE (source_pdf, number)` constraint so a question can't be saved twice. The table is wiped on every run while I'm debugging.
+- `main.py` now calls `export_to_db` for each worksheet after rendering.
+- Fixed two bugs. SQLite can't store a `pathlib` `WindowsPath`, so the PDF path is converted to a string before saving. The `number` column had been created as `INTEGER`, which silently turned `"1."` into `1`. `CREATE TABLE IF NOT EXISTS` doesn't change an existing table, so the table has to be dropped and recreated. The column is now `TEXT`, which keeps the marker in case I need to re-split a PDF.
+
 ## Known limitations / Future plans
 - The splitter is not universal, so each new worksheet type needs its conditions adjusting.
 - Split the answer sheets per question too. They are handwritten images, so the text-based splitter can't read them. Plan: first try reusing the question regions on the answer PDF (exact same layout) or fall back to a vision model to find question numbers. Each answer image would then be linked to its question.
-- Store the questions and their labels in an SQL database, instead of just saving images.
+- Add the label columns (board, level, topic and so on) to the SQL database. Questions are already stored, but without labels.
 - Use AI to label the questions automatically (topic, difficulty and so on) once the set of labels has been created.
+- ADD if model disagrees with original folder label, flag it
+
 - Build a React front end for teachers to use from computers on a school-approved network.
 - Add filtering to the front end, so teachers can narrow the question bank down by topic, difficulty or problem area and build custom worksheets from the results.
 

@@ -20,3 +20,11 @@ images/*
 
 # Scratch output
 output.txt
+
+# SQLite databases (WAL mode also creates -wal and -shm files)
+*.db
+*.db-wal
+*.db-shm
+
+# Other
+sql_notes
