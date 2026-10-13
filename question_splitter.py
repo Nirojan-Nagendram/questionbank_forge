@@ -1,17 +1,10 @@
 import pymupdf
-from utility import (
-    footer_cutoff,
-    left_margin,
-    question_marker,
-    gap,
-    SKIP_PAGE_ONE,
-)
 from models import Question
 
 open("output.txt", "w", encoding="utf8").close()
 
 
-def detect_question(page_idx, w):
+def detect_question(page_idx, w, left_margin, question_marker):
     x0, y0, x1, y1, text, block_no, line_no, word_no = w
     if abs(x0 - left_margin) < 3 and text[len(text) - 1] == question_marker:
         # floats can differ here, cannot just check against 54 exactly
@@ -67,16 +60,17 @@ def format_data(regions):
     return all_pieces
 
 
-def run_splitter(doc):
+def run_splitter(doc, config):
     questions = []
+    idx = []
     number = []
     regions = []
     current_region = []  # text start, page number(s), y start(s), y end(s)
-
+    i = 0
     prev_start = None
     for page_idx, page in enumerate(doc):  # inside page
         # x0, y0, x1, y1, text, block_no, line_no, word_no = w
-        if SKIP_PAGE_ONE:
+        if config["SKIP_PAGE_ONE"]:
             if page_idx == 0:
                 continue
             else:
@@ -84,19 +78,23 @@ def run_splitter(doc):
                     w
                     for w in page.get_text("words")
                     if w[1]
-                    < page.rect.height - footer_cutoff  # and w[1] > header_cutoff
+                    < page.rect.height
+                    - config["footer cutoff"]  # and w[1] > header_cutoff
                 ]
         else:
             words = [
                 w
                 for w in page.get_text("words")
-                if w[1] < page.rect.height - footer_cutoff  # and w[1] > header_cutoff
+                if w[1]
+                < page.rect.height - config["footer cutoff"]  # and w[1] > header_cutoff
             ]
         if words:
             top_word = min(w[1] for w in words)
             bottom_word = max(w[3] for w in words)
         for w in words:
-            y_start = detect_question(page_idx, w)
+            y_start = detect_question(
+                page_idx, w, config["left margin"], config["question marker"]
+            )
             if y_start is None:
                 """if no question start, then skip rest of loop until you find one"""
                 continue
@@ -106,23 +104,28 @@ def run_splitter(doc):
                 if prev_start[0] == page_idx:
                     current_region.append(
                         (
-                            clip_text(page, prev_start[1], y_start - gap),
+                            clip_text(page, prev_start[1], y_start - config["gap"]),
                             page_idx,
-                            prev_start[1] - gap,
-                            y_start - gap,
+                            prev_start[1] - config["gap"],
+                            y_start - config["gap"],
                         )
                     )
                 # elif use top of this page to start of the next question (only works if there is a next question otherwise banks it)
-                elif y_start - gap >= top_word:  # check y_start against top_word
+                # Question ends here if another question to come
+                elif (
+                    y_start - config["gap"] >= top_word
+                ):  # check y_start against top_word
                     current_region.append(
                         (
-                            clip_text(page, top_word, y_start - gap),
+                            clip_text(page, top_word, y_start - config["gap"]),
                             page_idx,
-                            top_word - gap,
-                            y_start - gap,
+                            top_word - config["gap"],
+                            y_start - config["gap"],
                         )
                     )
 
+                i += 1
+                idx.append(i)
                 number.append(prev_start[3])
                 regions.append(store_region(current_region))
                 write_output(current_region)
@@ -131,35 +134,37 @@ def run_splitter(doc):
             prev_start = (page_idx, y_start, page, w[4])
 
         if prev_start is not None:
+            """need to figure out cutoff, currently does cuts extra off but not enough? What should the rule be? i need more info"""
+            cut_off = config["gap"]
             start = prev_start[1] if prev_start[0] == page_idx else top_word
+            if config["LAST_PAGE_FOOTER"]:
+                cut_off -= config["footer cutoff"]
             current_region.append(
                 (
                     clip_text(page, start, bottom_word),
                     page_idx,
-                    start - gap,
-                    bottom_word + gap,
+                    start - config["gap"],
+                    bottom_word + cut_off,
                 )
             )
     # last question is written no matter what
+    # Question ends here if no more quesions
     if current_region:
         assert prev_start is not None
+        i += 1
+        idx.append(i)
         number.append(prev_start[3])
         regions.append(store_region(current_region))
         write_output(current_region)
     # doc.close()
-    data = zip(number, format_data(regions))
+    data = zip(
+        idx, number, format_data(regions), strict=True
+    )  # strict errors if wrong amount of anything
 
-    for no, regions in data:
-        questions.append(Question(no, regions))
+    for idx, no, regions in data:
+        questions.append(Question(idx, no, regions))
     return questions
 
 
 if __name__ == "__main__":
-    from utility import doc
-
-    question_list = run_splitter(doc)
-
-    print(f"\n {doc}")
-    for q in question_list:
-        print(q)
-        # print(f"q_no: {q.number},\nregions : {q.regions}")
+    pass

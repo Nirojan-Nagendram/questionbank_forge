@@ -1,4 +1,5 @@
 import os
+import re
 import pymupdf
 from PIL import Image
 
@@ -43,7 +44,9 @@ def clip_question(question_list, path, document):
             picture = page.get_pixmap(clip=clip, dpi=150)
             question_parts.append(picture)
         combined = combine_parts(question_parts)
-        q.path = f"images/{path}/question{q.number.rstrip('.')}.png"
+        # no trailing . or : etc.
+        safe_number = re.sub(r'[<>:"/\\|?*.\s]+$', "", q.number)
+        q.path = f"images/{path}/question{safe_number}.png"
         combined.save(q.path)
         q.width, q.height = combined.size
         questions.append(combined)
