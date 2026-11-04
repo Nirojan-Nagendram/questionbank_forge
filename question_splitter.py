@@ -1,7 +1,10 @@
 import pymupdf
 from models import Question
 
-open("output.txt", "w", encoding="utf8").close()
+WRITE = False
+
+if WRITE:
+    open("output.txt", "w", encoding="utf8").close()
 
 
 def detect_question(page_idx, w, left_margin, question_marker):
@@ -128,7 +131,8 @@ def run_splitter(doc, config):
                 idx.append(i)
                 number.append(prev_start[3])
                 regions.append(store_region(current_region))
-                write_output(current_region)
+                if WRITE:
+                    write_output(current_region)
                 current_region = []
             """ idx, start, end, text"""
             prev_start = (page_idx, y_start, page, w[4])
@@ -155,7 +159,8 @@ def run_splitter(doc, config):
         idx.append(i)
         number.append(prev_start[3])
         regions.append(store_region(current_region))
-        write_output(current_region)
+        if WRITE:
+            write_output(current_region)
     # doc.close()
     data = zip(
         idx, number, format_data(regions), strict=True

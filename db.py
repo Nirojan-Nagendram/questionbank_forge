@@ -41,7 +41,7 @@ def create_question_topics(con):
 
 
 # Add later, marks, answers image path, ai_topics, ai_difficulty.
-def create_path_table(con):
+def create_questionsdb(con):
     con.execute("""
         CREATE TABLE IF NOT EXISTS questions (
             id          INTEGER PRIMARY KEY,
@@ -61,7 +61,7 @@ def create_path_table(con):
 
 
 def create_tables(con):
-    create_path_table(con)
+    create_questionsdb(con)
     create_topics(con)
     create_question_topics(con)
 
@@ -74,17 +74,21 @@ def reset_tables(con):
 
 
 def add_topic(con, name, higher_only=0, parent_id=None, description=None):
-    current = con.execute(
-        "INSERT INTO topics (name,higher_only, parent_id, description)VALUES (?,?,?, ?)",
+    con.execute(
+        "INSERT OR IGNORE INTO topics (name,higher_only, parent_id, description) VALUES (?,?,?, ?)",
         (name, higher_only, parent_id, description),
     )
-    return current.lastrowid  # returns id
+    cursor = con.execute(
+        "SELECT id FROM topics WHERE name = ? AND parent_id IS ?", (name, parent_id)
+    )
+    id = cursor.fetchone()
+    return id[0]  # returns id by feteching id from cursor
 
 
 # source path is OG pdf path
 def save_question(con, idx, source_pdf, question):
     con.execute(
-        "INSERT INTO questions (idx, source_pdf, number, regions, image_path)VALUES (?, ?, ?, ?, ?)",
+        "INSERT OR IGNORE INTO questions (idx, source_pdf, number, regions, image_path)VALUES (?, ?, ?, ?, ?)",
         (
             idx,
             str(source_pdf),
@@ -97,7 +101,7 @@ def save_question(con, idx, source_pdf, question):
 
 def link_question_topic(con, question_id, topic_id, is_primary):
     con.execute(
-        "INSERT INTO question_topics (question_id, topic_id, is_primary)VALUES (?, ?, ?)",
+        "INSERT OR IGNORE INTO question_topics (question_id, topic_id, is_primary)VALUES (?, ?, ?)",
         (question_id, topic_id, is_primary),
     )
 
@@ -122,9 +126,9 @@ def seed_topic(con, topics, category_descriptions, higher_only):
 
 
 def init_db(con, topics, category_descriptions, higher_only):
-    reset_tables(con)
     create_tables(con)
     seed_topic(con, topics, category_descriptions, higher_only)
+    # reset_tables(con)
 
 
 def export_to_db(con, questions, pdf_path):

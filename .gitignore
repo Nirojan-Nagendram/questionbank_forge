@@ -8,7 +8,6 @@ __pycache__/
 # Python files
 test.py
 utility.py
-config.py
 
 # Source PDFs (contents ignored, folder kept via .gitkeep)
 pdf_folder/*
@@ -25,6 +24,9 @@ output.txt
 *.db
 *.db-wal
 *.db-shm
+
+# Anthropic API
+API.py
 
 # Other
 sql_notes

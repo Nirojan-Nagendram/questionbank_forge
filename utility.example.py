@@ -1,35 +1,40 @@
 """
-Which worksheet source to process. Copy this file to utility.py and edit.
-Pick ONE source by setting its flag to True, then point the paths at your PDFs.
+Worksheet sources and their layout settings. Copy this file to utility.py and edit.
+Add one entry to SOURCES per worksheet type, and measure the values for your own
+PDFs (helpers.print_page_details prints each word's position).
+
+enabled          : set to False to skip this source when running main.py
+root             : folder searched (including subfolders) for PDFs
+header cutoff    : how far down from the top to ignore (0 = nothing)
+footer cutoff    : how far up from the bottom to cut off
+left margin      : x position (in points) where a question number starts
+gap              : spacing used when stitching regions together
+question marker  : the character a question number ends with, e.g. "1." or "1:"
+SKIP_PAGE_ONE    : ignore the first page (e.g. a cover sheet)
+LAST_PAGE_FOOTER : the last page has its own footer that needs cutting off
 """
 
-import pymupdf
-from config import example_source_a_dict, example_source_b_dict
-from helpers import print_page_details  # noqa: F401 (re-exported for printer.py)
-
-# Source flags
-example_source_a = True
-example_source_b = False
-
-debug = True
-
-if example_source_a:
-    pdf_path = r"pdf_folder\example_source_a\questions\Example Worksheet.pdf"
-    root = r"pdf_folder\example_source_a"
-    footer_cutoff = example_source_a_dict["footer cutoff"]
-    left_margin = example_source_a_dict["left margin"]
-    gap = example_source_a_dict["gap"]
-    question_marker = example_source_a_dict["question marker"]
-    SKIP_PAGE_ONE = False
-
-elif example_source_b:
-    pdf_path = r"pdf_folder\example_source_b\questions\Example Worksheet.pdf"
-    root = r"pdf_folder\example_source_b"
-    header_cutoff = example_source_b_dict["header cutoff"]
-    footer_cutoff = example_source_b_dict["footer cutoff"]
-    left_margin = example_source_b_dict["left margin"]
-    gap = example_source_b_dict["gap"]
-    question_marker = example_source_b_dict["question marker"]
-    SKIP_PAGE_ONE = True
-
-doc = pymupdf.open(pdf_path)
+SOURCES = {
+    "example source a": {
+        "enabled": True,
+        "root": R"pdf_folder\example_source_a",
+        "header cutoff": 0,
+        "footer cutoff": 60,
+        "left margin": 50,
+        "gap": 1,
+        "question marker": ".",
+        "SKIP_PAGE_ONE": False,
+        "LAST_PAGE_FOOTER": False,
+    },
+    "example source b": {
+        "enabled": False,
+        "root": R"pdf_folder\example_source_b",
+        "header cutoff": 120,
+        "footer cutoff": 60,
+        "left margin": 100,
+        "gap": 1,
+        "question marker": ":",
+        "SKIP_PAGE_ONE": True,
+        "LAST_PAGE_FOOTER": True,
+    },
+}
