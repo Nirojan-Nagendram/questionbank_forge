@@ -2,6 +2,7 @@ import os
 import re
 import pymupdf
 from PIL import Image
+from utility import strip_chain
 
 
 def make_fold(folder):
@@ -45,7 +46,7 @@ def clip_question(question_list, path, document):
             question_parts.append(picture)
         combined = combine_parts(question_parts)
         # no trailing . or : etc.
-        safe_number = re.sub(r'[<>:"/\\|?*.\s]+$', "", q.number)
+        safe_number = strip_chain(q.number, [re.compile(r"\d+")])
         q.path = f"images/{path}/question{safe_number}.png"
         combined.save(q.path)
         q.width, q.height = combined.size

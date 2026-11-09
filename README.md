@@ -22,6 +22,7 @@ The software is intended to be used through a React web application, so that it 
 4. Edit `SOURCES` in `utility.py`. Each entry represents one worksheet type:
    - `root` is the folder holding its PDFs. Subfolders are searched too, and any folder called `answers` is skipped.
    - The layout values (left margin, header/footer cutoff, question marker and so on) are described at the top of the file. `print_page_details` in `helpers.py` prints the position of each word to help measure them.
+   - `SKIP_PAGE_ONE` ignores the first page of each PDF, for worksheets that begin with a cover sheet.
    - `patterns` defines the regular expressions that the validator uses to count the questions in each PDF (see "Validation" below).
    - Set `enabled` to `False` for any source that should not be processed.
 5. Run `python main.py`. Every enabled source is processed: question images are written to `images/<worksheet name>/`, each worksheet is validated, and the questions are saved to `questions.db`.
@@ -99,10 +100,17 @@ Each check returns a flag, and a `WorksheetReport` (defined in `models.py`) stor
 29/10:
 - Diagnosed the PDF sequence check failure. The PDF question numbers are never flattened: they are stored as a list per page, whereas the extracted numbers are already a flat list. The sequence check needs a flat list to work. The flattening was added inside the missing/extra question functions, but it should happen earlier, as the sequence check also depends on it. This would also be simpler, as the extracted numbers are already flat.
 
+05/11:
+- Reworked number extraction so that it takes an ordered list of regular expressions instead of being called repeatedly. `strip_chain` applies each expression to the output of the previous one and returns an integer, or `None` if any step fails to match. This keeps the cleaning rules in data rather than in nested calls, and makes a new rule a one-line addition.
+- Used the chain to handle unexpected question markers such as `*10.`, where a leading symbol previously prevented the number from being recognised. `strip_chain` was moved into `utility.py` so that the validator and the renderer (which uses it to build safe image file names) share one implementation.
+- Added a `SKIP_PAGE_ONE` option to each source's config, used by both the splitter and the validator. Cover sheets contain text such as dates and instructions that can match the question patterns, which produced false `EXTRA_QUESTION` and sequence failures.
+09/11:
+- Added a `text` field to the `Question` class so that the validator can detect empty questions. The text was already being extracted by the splitter, so it is now simply stored on the class, where it is easier to access.
+- Resolved the issue of a number within the question text being counted as a second question number (for example, `2. 10 people bought an item` previously yielded both 2 and 10). The numbering chain now anchors on the start of the line before extracting the digits.
+
 ## Known issues
-- `get_numbers` in `validate.py` originally detected nothing, because `.isdigit()` cannot recognise that `(4` represents 4. This has been fixed, but `strip_number` handles the same task more reliably, so `get_numbers` may no longer be needed.
-- `strip_number` needs a condition to stop a number in the question text from being counted as a second question number. For example, `2. 10 people bought an item` currently yields both 2 and 10.
-- example files need to be updated
+- `utility.example.py` is out of date and needs to match the current `utility.py` (for example, it does not include `strip_chain`), so a fresh clone will not run as described in "How to run".
+- The stripped question numbers are recalculated in several places (the validator and renderer) They should be computed once, when the `Question` is created, and stored as a field on the class. This would also remove the repeated `strip_number` calls in `validate.py`.
 
 ## Known limitations / Future plans
 - The splitter is not universal, so each new worksheet type needs its conditions adjusting.

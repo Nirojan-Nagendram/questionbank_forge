@@ -8,6 +8,7 @@ class Question:
     idx: int
     number: str
     regions: list
+    text: str
     path: str = ""
     height: int = 0
     width: int = 0

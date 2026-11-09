@@ -7,7 +7,7 @@ if WRITE:
     open("output.txt", "w", encoding="utf8").close()
 
 
-def detect_question(page_idx, w, left_margin, question_marker):
+def detect_question(w, left_margin, question_marker):
     x0, y0, x1, y1, text, block_no, line_no, word_no = w
     if abs(x0 - left_margin) < 3 and text[len(text) - 1] == question_marker:
         # floats can differ here, cannot just check against 54 exactly
@@ -52,7 +52,7 @@ def store_region(current_region):
     # print(f"{current_question[0][:2]}, {page}, {round_y_start}, {round_y_end}")
     question = "\n".join(current_question)
 
-    return (page, y_start_list, y_end_list)
+    return current_question, (page, y_start_list, y_end_list)
 
 
 """ regions currently outputs [()] so format unpacks it and groups same questions in a list."""
@@ -68,6 +68,7 @@ def run_splitter(doc, config):
     idx = []
     number = []
     regions = []
+    text = []
     current_region = []  # text start, page number(s), y start(s), y end(s)
     i = 0
     prev_start = None
@@ -96,7 +97,7 @@ def run_splitter(doc, config):
             bottom_word = max(w[3] for w in words)
         for w in words:
             y_start = detect_question(
-                page_idx, w, config["left margin"], config["question marker"]
+                w, config["left margin"], config["question marker"]
             )
             if y_start is None:
                 """if no question start, then skip rest of loop until you find one"""
@@ -130,7 +131,8 @@ def run_splitter(doc, config):
                 i += 1
                 idx.append(i)
                 number.append(prev_start[3])
-                regions.append(store_region(current_region))
+                text.append(store_region(current_region)[0])
+                regions.append(store_region(current_region)[1])
                 if WRITE:
                     write_output(current_region)
                 current_region = []
@@ -158,16 +160,17 @@ def run_splitter(doc, config):
         i += 1
         idx.append(i)
         number.append(prev_start[3])
-        regions.append(store_region(current_region))
+        text.append(store_region(current_region)[0])
+        regions.append(store_region(current_region)[1])
         if WRITE:
             write_output(current_region)
-    # doc.close()
+
     data = zip(
-        idx, number, format_data(regions), strict=True
+        idx, number, format_data(regions), text, strict=True
     )  # strict errors if wrong amount of anything
 
-    for idx, no, regions in data:
-        questions.append(Question(idx, no, regions))
+    for idx, no, regions, text in data:
+        questions.append(Question(idx, no, regions, text))
     return questions
 
 

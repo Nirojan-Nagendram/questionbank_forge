@@ -1,12 +1,14 @@
 import pymupdf
 import re
+import csv
+
+""" To be ran per document """
+
 from models import WorksheetReport
-
-""" To be ran on document """
-
-from utility import SOURCES, pdf
+from utility import SOURCES, pdf, strip_chain
 
 doc = pymupdf.open(pdf)
+
 
 # Need to fix too many lambda & regular functions combined.
 
@@ -76,12 +78,18 @@ def non_sequential(name, number_list):
     return check
 
 
+def empty_question(name, text):
+    pass
+
+
 FAILURE_MODES = {
+    # per sheet
     "MISSING_QUESTION": "Questions found in the PDF text greater than extracted one",
     "EXTRA_QUESTION": "Questions found in PDF is less than extracted ones",
     "SEQUENCE": "Numbers extracted but out of order or with gaps, like 1,2,4,3 or 1,2,5",
     "PDF_NON-SEQUENTIAL": "PDF is NON-SEQUENTIAL",
     "EXTRACTED_NON-SEQUENTIAL": "EXTRACTED is NON-SEQUENTIAL",
+    # Per question
     "SPLIT_QUESTION": "One question cut into multiple pieces",
     "MERGED_QUESTION": "Multiple questions joined into one",
     "EMPTY_QUESTION": "Number found but no body content",
@@ -95,40 +103,24 @@ CHECKS = [
     is_missing_extra("MISSING_QUESTION", missing_q),
     is_missing_extra("EXTRA_QUESTION", extra_q),
     # no of marks is not sequential so only ran on numbering
-    non_sequential("PDF_NON-SEQUENTIAL", lambda r: r.pdf_numbering["numbering"]),
+    non_sequential(
+        "PDF_NON-SEQUENTIAL", lambda r: flatten(r.pdf_numbering["numbering"])
+    ),
     non_sequential("EXTRACTED_NON-SEQUENTIAL", lambda r: r.extracted_numbering),
+    # empty_question("EMPTY_QUESTION", lambda r: r.text),
 ]
-
-
-def get_numbers(questions):
-    num_re = re.compile(r"\d+")
-    numbers = []
-    for q in questions:
-        text = "".join(q)
-        m = num_re.search(text)  # finds digit anywhere in string
-        if m:
-            numbers.append(int(m.group()))  # .group() is text from matched
-    return numbers  # [1, 2, 3, 4]
 
 
 """ Get a list of stripped numbers from 1., 1:, etc """
 
 
-def strip_number(questions, condition, integer: bool):
+def strip_number(questions, conditions: list):
     numbers = []
     for q in questions:
-        m = condition.search(q)  # finds digit anywhere in string
-        # print(m)
-        # need to add condition to prevent additional
-        if m and integer:
-            numbers.append(int(m.group()))  # .group() is text from matched
-        elif m:
-            numbers.append(m.group())
-    # print(numbers)
+        stripped = strip_chain(q, conditions)
+        if stripped:
+            numbers.append(stripped)
     return numbers  # [1, 2, 3, 4]
-
-
-""" get just number from " (Total x marks) " """
 
 
 """How failure mode is selected
@@ -158,13 +150,16 @@ def group_line(page):
 """ Pattern is dependent on the worksheet."""
 
 
-def count_matches(document, pattern):
-    # Number of "marks)" on across all pages or question numbers found anywhere on page.
+def count_matches(document, pattern, SKIP_PAGE_ONE):
+    # Number of "marks)" or "1." etc on across all pages or question numbers found anywhere on page.
     regex = re.compile(pattern)
     question_list = []  # output
     flattened = []
     total = 0
-    for page in document:
+    for page_idx, page in enumerate(document):
+        if SKIP_PAGE_ONE:
+            if page_idx == 0:
+                continue
         question_details = []
         for line_text, line_w in group_line(page):
             # x0, y0, x1, y1, text, block_no, line_no, word_no = w
@@ -189,23 +184,18 @@ def count_expected_no(document, config):
     quest_list = {}
     for method in config["patterns"]:  # e.g. ["marks", "numbering"]
         counts[method], count_list[method] = count_matches(
-            document, config["patterns"][method]
+            document, config["patterns"][method], config["SKIP_PAGE_ONE"]
         )
         # Prints raw strings.
         # print(f"\n{method} : {count_list[method]}")
         if method == "numbering":
             quest_list[method] = [
-                strip_number(
-                    strip_number(line, re.compile(r"^\d+\.(\s|$)"), integer=False),
-                    re.compile(r"\d+"),
-                    integer=True,
-                )
+                strip_number(line, [re.compile(r"^\d+\.(\s|$)"), re.compile(r"\d+")])
                 for line in count_list[method]
             ]
         if method == "marks":
             marks_list[method] = [
-                strip_number(line, re.compile(r"\d+"), integer=True)
-                for line in count_list[method]
+                strip_number(line, [re.compile(r"\d+")]) for line in count_list[method]
             ]
             quest_list["marks"] = marks_to_numbers(marks_list[method])
 
@@ -222,14 +212,30 @@ def count_actual_no(question_list):
     numbers = []
     for question in question_list:
         numbers.append(question.number)
-    stripped_numbers = strip_number(numbers, re.compile(r"\d+"), integer=True)
+    stripped_numbers = strip_number(numbers, [re.compile(r"\d+")])
     return len(question_list), stripped_numbers  # [3, ["1", "2" ,"3"]]
 
 
+def reset_report(path="validation_flagged.csv"):
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        pass
+
+
+def save_validation(report):
+    with open("validation_flagged.csv", "a", newline="") as csvfile:
+        flag_writer = csv.writer(
+            csvfile, delimiter=" ", quotechar="|", quoting=csv.QUOTE_MINIMAL
+        )
+        flag_writer.writerow([report.name, report.flag])
+
+
 def validate_on_sheet(name, document, config, question_list):
+    for question in question_list:
+        print(question.text)
     expected, exp_questions = count_expected_no(document, config)
     actual, act_questions = count_actual_no(question_list)
     # print(exp_questions, act_questions)
+
     report = WorksheetReport(
         name,
         expected,
@@ -243,11 +249,8 @@ def validate_on_sheet(name, document, config, question_list):
         },  # {"marks": "PASS", "numbering": "FAIL"}
     )
     report.flag = select_failure_mode(report)
-    print(report.flag)
-
-    for name, pattern in report.flag:
-        if report.name == "INSERT NAME HERE":
-            continue
-            print(f"{report.name}: {report.flag}")
+    if report.flag[0][1] != None:
+        save_validation(report)
+        # print(report.flag)
 
     return report
