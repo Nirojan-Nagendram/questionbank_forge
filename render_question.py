@@ -36,7 +36,7 @@ def clip_question(question_list, path, document):
     questions = []
     question_parts = []
     for q in question_list:
-        pieces = q.regions
+        pieces = q.region
         for page_idx, y0, y1 in pieces:
             page = document[page_idx]
             clip = pymupdf.Rect(x0=0, y0=y0, x1=page.rect.width, y1=y1)

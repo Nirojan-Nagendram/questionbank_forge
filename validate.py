@@ -1,32 +1,42 @@
+"""To be ran per document"""
+
 import pymupdf
 import re
 import csv
-
-""" To be ran per document """
-
+import logging
 from models import WorksheetReport
 from utility import SOURCES, pdf, strip_chain
 
+logging.basicConfig(level=logging.DEBUG)
+validator_logger = logging.getLogger("validator")
+validator_logger.disabled = True
+
+# need to fix dot should be universal
 doc = pymupdf.open(pdf)
+BLANK = re.compile(r"\s*(\d+\.)?\s*")  # nothing, or just a number and a dot
 
 
 # Need to fix too many lambda & regular functions combined.
 
 
+# Sets up marker for different markers re.escape does literal marker.
+def marker_pattern(marker):
+    return rf"^\d+{re.escape(marker)}(\s|$)"
+
+
+def is_blank(text):
+    # compile once not multiple times.
+    return BLANK.fullmatch(text) is not None
+
+
 def flatten(by_page):
     # [[1,2,3],[1,2,3]] = [1,2,3,1,2,3]
-    # print(by_page)
     return [n for nums in by_page for n in nums]
 
 
 def list_minus(a, b):
     remove = set(b)  # set allows hash(quicker)
     return [x for x in a if x not in remove]
-
-
-def is_sequential(numbers):  # [ 1,2,3,4,5]
-    length = len(numbers)
-    return numbers == list(range(1, length + 1)) or length <= 1
 
 
 def missing_q(pattern):
@@ -39,6 +49,11 @@ def extra_q(pattern):
     return lambda r: list_minus(
         r.extracted_numbering, flatten(r.pdf_numbering[pattern])
     )
+
+
+def is_sequential(numbers):  # [ 1,2,3,4,5]
+    length = len(numbers)
+    return numbers == list(range(1, length + 1)) or length <= 1
 
 
 def marks_to_numbers(nested):
@@ -54,7 +69,12 @@ def marks_to_numbers(nested):
     return results
 
 
-# need to add new question number converter for "marks)" so list makes sense
+# ---------------------------------------------------------------------------
+# Per-DOCUMENT checks
+# ---------------------------------------------------------------------------
+
+
+# Checks if any questions are missing/extra from pdf/extracted
 def is_missing_extra(name: str, calculation):
     def check(r):
         flags = []
@@ -67,6 +87,7 @@ def is_missing_extra(name: str, calculation):
     return check
 
 
+# Checks both pdf and extracted are sequential.
 def non_sequential(name, number_list):
     def check(r):
         nums = number_list(r)
@@ -78,18 +99,112 @@ def non_sequential(name, number_list):
     return check
 
 
-def empty_question(name, text):
-    pass
+# ---------------------------------------------------------------------------
+# Per-PAGE checks
+# ---------------------------------------------------------------------------
+
+
+# lost_words: Checks if there is any text (within limits) that is not attached to a question
+def lost_words(name, doc, get_numbers, get_regions, cfg, tolerance=1.5):
+    def check(r):
+        # total height per page dict
+        by_page = {}
+        for number, question in zip(get_numbers(r), get_regions(r)):
+            for page_no, y_start, y_end in question:
+                # sets default when no question is discovered
+                by_page.setdefault(page_no, []).append((number, y_start, y_end))
+
+        output = {}
+        for idx, page in enumerate(doc(r)):
+            if cfg(r)["SKIP_PAGE_ONE"] and idx == 0:
+                continue
+            limit = page.rect.height - cfg(r)["footer cutoff"]
+            page_regions = by_page.get(idx, [])
+            for x0, y0, x1, y1, text, *_ in page.get_text("words"):
+                if y0 > limit:
+                    continue
+                if not any(
+                    y_start - tolerance <= y0 and y1 - tolerance <= y_end
+                    for _, y_start, y_end in page_regions
+                ):
+                    entry = output.setdefault(
+                        f"pg.{idx+1}",
+                        {
+                            "questions": sorted({n for n, _, _ in page_regions}),
+                            "y": [],
+                        },
+                    )
+                    entry["y"].append((round(y0, 1)))
+
+        if output:
+            return [name, f"Missing words from any questions: {output}"]
+        return []
+
+    return check
+
+
+# ---------------------------------------------------------------------------
+# Per-QUESTION checks
+# ---------------------------------------------------------------------------
+
+
+# split_question: every question should contain at least one marker (e.g. "2."),
+# so a question with zero matches is flagged together with the previous question.
+def split_question(name, get_numbers, get_texts, get_marker):
+    # input = ['1. (a) blah blah'] = missing end of question or ['(b) blah'] = missing beginning of question
+    def check(r):
+        numbers = get_numbers(r)
+        split = []
+        regex = re.compile(marker_pattern(get_marker(r)), re.MULTILINE)
+        for idx, text in enumerate(get_texts(r)):
+            matches = [m.group(0) for m in regex.finditer(text)]
+            if len(matches) == 0:  # checks if there is not question number
+                prev = numbers[idx - 1] if idx > 0 else None
+                split.append((prev, numbers[idx]))
+        if split:
+            return [name, f"question split between these pairs, {split}"]
+        return []
+
+    return check
+
+
+# Checks if multiple questions are attached to one question object
+def merged_question(name, get_texts, get_marker):  # ['1. why blah blah\n 2. blah blah']
+    # marker is per source, so the regex is built per report, not at import.
+    def check(r):
+        flags = []
+        regex = re.compile(marker_pattern(get_marker(r)), re.MULTILINE)
+        for text in get_texts(r):
+            matches = [m.group(0) for m in regex.finditer(text)]
+            if len(matches) >= 2:
+                flags.append((name, matches, len(matches)))
+        return flags
+
+    return check
+
+
+# Checks if there is any text in question object
+def empty_question(name, get_numbers, get_texts):
+    def check(r):
+        flags = []
+        for number, text in zip(get_numbers(r), get_texts(r)):
+            if is_blank(text):
+                flags.append((name, number, text))
+        return flags
+
+    return check
 
 
 FAILURE_MODES = {
-    # per sheet
+    # Per-DOC checks
     "MISSING_QUESTION": "Questions found in the PDF text greater than extracted one",
     "EXTRA_QUESTION": "Questions found in PDF is less than extracted ones",
     "SEQUENCE": "Numbers extracted but out of order or with gaps, like 1,2,4,3 or 1,2,5",
     "PDF_NON-SEQUENTIAL": "PDF is NON-SEQUENTIAL",
     "EXTRACTED_NON-SEQUENTIAL": "EXTRACTED is NON-SEQUENTIAL",
-    # Per question
+    # Per-PAGE checks
+    "LOST_WORDS": "Words on page are missing from any questions on page",
+    # Per-QUESTION checks
     "SPLIT_QUESTION": "One question cut into multiple pieces",
     "MERGED_QUESTION": "Multiple questions joined into one",
     "EMPTY_QUESTION": "Number found but no body content",
@@ -97,8 +212,8 @@ FAILURE_MODES = {
 }
 
 
-# add check for split question, merged_question and empty
-""" Checks contains checks and flags to raise, needs output a (str, list)"""
+""" Checks contains checks and flags to raise, needs output a (str, list)
+    [] means no failure and is skipped when building true flags """
 CHECKS = [
     is_missing_extra("MISSING_QUESTION", missing_q),
     is_missing_extra("EXTRA_QUESTION", extra_q),
@@ -107,13 +222,27 @@ CHECKS = [
         "PDF_NON-SEQUENTIAL", lambda r: flatten(r.pdf_numbering["numbering"])
     ),
     non_sequential("EXTRACTED_NON-SEQUENTIAL", lambda r: r.extracted_numbering),
-    # empty_question("EMPTY_QUESTION", lambda r: r.text),
+    lost_words(
+        "LOST WORDS",
+        lambda r: r.document,
+        lambda r: r.numbers,
+        lambda r: r.regions,
+        lambda r: r.config,
+    ),
+    split_question(
+        "SPLIT QUESTION",
+        lambda r: r.numbers,
+        lambda r: r.texts,
+        lambda r: r.config["question marker"],
+    ),
+    merged_question(
+        "MERGED_QUESTION", lambda r: r.texts, lambda r: r.config["question marker"]
+    ),  #   add question marker pattern
+    empty_question("EMPTY_QUESTION", lambda r: r.numbers, lambda r: r.texts),
 ]
 
 
-""" Get a list of stripped numbers from 1., 1:, etc """
-
-
+# Get a list of stripped numbers from 1., 1:, etc
 def strip_number(questions, conditions: list):
     numbers = []
     for q in questions:
@@ -123,14 +252,10 @@ def strip_number(questions, conditions: list):
     return numbers  # [1, 2, 3, 4]
 
 
-"""How failure mode is selected
-    For each check in CHECKS, then for each flag in what that check returns, collect the flag.
-    if [] then nothing to loop over so it is skipped."""
-
-
+#   How failure mode is selected
+#   For each check in CHECKS, then for each flag in what that check returns, collect the flag.
+#   if [] then nothing to loop over so it is skipped.
 def select_failure_mode(report):
-    # print(f"extracted numbering: {report.extracted_numbering}")
-    # print(f"pdf numbering      : {report.pdf_numbering['numbering']}")
     flags = [flag for check in CHECKS for flag in check(report)]
     return flags or [("NONE", None)]
 
@@ -145,9 +270,6 @@ def group_line(page):
         words.sort(key=lambda w: w[7])
         # generator yielding lines and line info every pass
         yield " ".join(w[4] for w in words), words
-
-
-""" Pattern is dependent on the worksheet."""
 
 
 def count_matches(document, pattern, SKIP_PAGE_ONE):
@@ -173,8 +295,7 @@ def count_matches(document, pattern, SKIP_PAGE_ONE):
             question_list.append(text)  # would currently delete
             flattened.extend(text)
 
-    # [4, ["1.","2.","3.","4."]]
-    return total, question_list
+    return total, question_list  # [4, ["1.","2.","3.","4."]]
 
 
 def count_expected_no(document, config):
@@ -187,7 +308,7 @@ def count_expected_no(document, config):
             document, config["patterns"][method], config["SKIP_PAGE_ONE"]
         )
         # Prints raw strings.
-        # print(f"\n{method} : {count_list[method]}")
+        validator_logger.debug(f"\n{method} = {count_list[method]}")
         if method == "numbering":
             quest_list[method] = [
                 strip_number(line, [re.compile(r"^\d+\.(\s|$)"), re.compile(r"\d+")])
@@ -200,12 +321,10 @@ def count_expected_no(document, config):
             quest_list["marks"] = marks_to_numbers(marks_list[method])
 
         # Prints processed data
-        # print(f"\n{method} : {quest_list[method]}")
+        validator_logger.debug(f" {method} = {quest_list[method]}")
 
-    return (
-        counts,
-        quest_list,
-    )  # ({"marks": 3, "numbering": 5, {"marks": [1,2,3,4], "numbering": [1,2,3,4,5]
+    # ({"marks": 3, "numbering": 5, {"marks": [1,2,3,4], "numbering": [1,2,3,4,5]
+    return (counts, quest_list)
 
 
 def count_actual_no(question_list):
@@ -230,14 +349,21 @@ def save_validation(report):
 
 
 def validate_on_sheet(name, document, config, question_list):
-    for question in question_list:
-        print(question.text)
+    number_list = [question.number for question in question_list]
+    text_list = [question.text for question in question_list]
+    region_list = [question.region for question in question_list]
     expected, exp_questions = count_expected_no(document, config)
     actual, act_questions = count_actual_no(question_list)
+    marker = config["question marker"]  # "." or ":", turned into a regex per check
     # print(exp_questions, act_questions)
 
     report = WorksheetReport(
         name,
+        number_list,
+        text_list,
+        region_list,
+        document,
+        config,
         expected,
         actual,
         exp_questions,
@@ -251,6 +377,6 @@ def validate_on_sheet(name, document, config, question_list):
     report.flag = select_failure_mode(report)
     if report.flag[0][1] != None:
         save_validation(report)
-        # print(report.flag)
+        print(report.flag)
 
     return report

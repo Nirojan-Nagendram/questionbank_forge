@@ -51,11 +51,10 @@ def store_region(current_region):
     round_y_end = [round(item) for item in y_end_list]
     # print(f"{current_question[0][:2]}, {page}, {round_y_start}, {round_y_end}")
     question = "\n".join(current_question)
+    return question, (page, y_start_list, y_end_list)
 
-    return current_question, (page, y_start_list, y_end_list)
 
-
-""" regions currently outputs [()] so format unpacks it and groups same questions in a list."""
+""" format_data: regions currently outputs [()] so format unpacks it and groups same questions in a list."""
 
 
 def format_data(regions):
@@ -169,8 +168,8 @@ def run_splitter(doc, config):
         idx, number, format_data(regions), text, strict=True
     )  # strict errors if wrong amount of anything
 
-    for idx, no, regions, text in data:
-        questions.append(Question(idx, no, regions, text))
+    for idx, no, region, text in data:
+        questions.append(Question(idx, no, region, text))
     return questions
 
 

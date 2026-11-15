@@ -93,7 +93,7 @@ def save_question(con, idx, source_pdf, question):
             idx,
             str(source_pdf),
             question.number,
-            json.dumps(question.regions),
+            json.dumps(question.region),
             question.path,
         ),
     )

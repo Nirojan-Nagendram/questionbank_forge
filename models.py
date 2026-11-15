@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 class Question:
     idx: int
     number: str
-    regions: list
+    region: list
     text: str
     path: str = ""
     height: int = 0
@@ -21,6 +21,12 @@ class Question:
 @dataclass
 class WorksheetReport:
     name: str
+    numbers: list
+    texts: list
+    regions: list
+    document: object = field(repr=False)
+    config: dict = field(repr=False)
+
     pdf_no: dict
     extracted_no: int
     pdf_numbering: dict
