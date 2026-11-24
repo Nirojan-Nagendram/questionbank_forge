@@ -2,7 +2,6 @@ import os
 import re
 import pymupdf
 from PIL import Image
-from utility import strip_chain
 
 
 def make_fold(folder):
@@ -45,9 +44,7 @@ def clip_question(question_list, path, document):
             picture = page.get_pixmap(clip=clip, dpi=150)
             question_parts.append(picture)
         combined = combine_parts(question_parts)
-        # no trailing . or : etc.
-        safe_number = strip_chain(q.number, [re.compile(r"\d+")])
-        q.path = f"images/{path}/question{safe_number}.png"
+        q.path = f"images/{path}/question{q.idx}.png"
         combined.save(q.path)
         q.width, q.height = combined.size
         questions.append(combined)

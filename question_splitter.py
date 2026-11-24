@@ -1,5 +1,6 @@
 import pymupdf
 from models import Question
+from helpers import find_footer_limit
 
 WRITE = False
 
@@ -73,24 +74,15 @@ def run_splitter(doc, config):
     prev_start = None
     for page_idx, page in enumerate(doc):  # inside page
         # x0, y0, x1, y1, text, block_no, line_no, word_no = w
-        if config["SKIP_PAGE_ONE"]:
-            if page_idx == 0:
-                continue
-            else:
-                words = [
-                    w
-                    for w in page.get_text("words")
-                    if w[1]
-                    < page.rect.height
-                    - config["footer cutoff"]  # and w[1] > header_cutoff
-                ]
-        else:
-            words = [
-                w
-                for w in page.get_text("words")
-                if w[1]
-                < page.rect.height - config["footer cutoff"]  # and w[1] > header_cutoff
-            ]
+        if config["SKIP_PAGE_ONE"] and page_idx == 0:
+            continue
+        # Only words between the header and footer cutoffs count, otherwise
+        # top_word lands in the header and questions swallow it.
+        words = [
+            w
+            for w in page.get_text("words")
+            if config["header cutoff"] <= w[1] < page.rect.height - config["footer cutoff"]
+        ]
         if words:
             top_word = min(w[1] for w in words)
             bottom_word = max(w[3] for w in words)
@@ -139,17 +131,16 @@ def run_splitter(doc, config):
             prev_start = (page_idx, y_start, page, w[4])
 
         if prev_start is not None:
-            """need to figure out cutoff, currently does cuts extra off but not enough? What should the rule be? i need more info"""
-            cut_off = config["gap"]
             start = prev_start[1] if prev_start[0] == page_idx else top_word
-            if config["LAST_PAGE_FOOTER"]:
-                cut_off -= config["footer cutoff"]
+            if config["LAST_PAGE_FOOTER"] and page_idx + 1 == len(doc):
+                bottom_word = find_footer_limit(page, config, bottom_word)
+
             current_region.append(
                 (
                     clip_text(page, start, bottom_word),
                     page_idx,
                     start - config["gap"],
-                    bottom_word + cut_off,
+                    bottom_word,
                 )
             )
     # last question is written no matter what

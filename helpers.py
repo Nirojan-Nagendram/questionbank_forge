@@ -1,10 +1,19 @@
-def print_page_details(info, page_index=None):
-    x0, y0, x1, y1, text, block_no, line_no, word_no = info
-    if page_index is not None:
-        print(
-            f"pg{page_index+1}: {text}, (x0,y0) : {round(x0),round(y0)}, (x1,y1) : {round(x1),round(y1)} line no: {line_no}, word no: {word_no}"
-        )
-    else:
-        print(
-            f"{text}, (x0,y0) : {round(x0),round(y0)}, (x1,y1) : {round(x1),round(y1)} line no: {line_no}, word no: {word_no}"
-        )
+import re
+
+
+def find_footer_limit(page, config, default):
+    footer_markers = [
+        w[1] for w in page.get_text("words") if w[4] == config["LAST_PAGE_FOOTER"]
+    ]
+    if footer_markers:
+        return footer_markers[-1] - config["gap"]
+    return default
+
+
+def strip_chain(text, steps):  # "8:" or "*2." etc
+    for step in steps:
+        m = re.search(step, text)  # finds digit anywhere in string
+        if not m:
+            return None
+        text = m.group()
+    return int(text)  # 8 or 2 etc

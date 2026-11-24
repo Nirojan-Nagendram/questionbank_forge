@@ -53,12 +53,12 @@ Each check returns a flag, and a `WorksheetReport` (defined in `models.py`) stor
 The dated log of how the project was built, with the decisions and bugs along the way, is in [devlog.md](devlog.md).
 
 ## Known issues
-- `utility.example.py` is out of date and needs to match the current `utility.py` (for example, it does not include `strip_chain`), so a fresh clone will not run as described in "How to run".
+- `utility.example.py` is out of date and needs to match the current `utility.py`, so a fresh clone will not run as described in "How to run".
 - The stripped question numbers are recalculated in several places (the validator and renderer). They should be computed once, when the `Question` is created, and stored as a field on the class. This would also remove the repeated `strip_number` calls in `validate.py`.
-- Some validator patterns assume the `1.` marker format (for example the blank check and the numbering chain), so other markers such as `1:` are not fully supported. These need generalising to use the configured question marker.
-- `header cutoff` is defined in each source's config but is not yet applied by the splitter or the validator. Only the footer cutoff is currently used.
+- marks pattern currently checks for "marks)" rather than the marks number, Strip chain function would be simpler (identical run method) if it used the number ie. "(3 marks)" = "3"
+- validator and splitter use different methods of cutting footers one takes it away from page height other just find footer point and cuts it. Pick one and make it universal.
 
-## Known limitations / Future plans
+## Future plans
 - The splitter is not universal, so each new worksheet type needs its conditions adjusting.
 - Split the answer sheets per question too. They are handwritten images, so the text-based splitter cannot read them. The plan is to first try reusing the question regions on the answer PDF (which has the same layout), and to fall back to a vision model to find question numbers. Each answer image would then be linked to its question.
 - Add the label columns (board, level, topic and so on) to the SQL database. Questions are already stored, but without labels.

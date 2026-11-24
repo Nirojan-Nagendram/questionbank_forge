@@ -24,6 +24,7 @@ class WorksheetReport:
     numbers: list
     texts: list
     regions: list
+    paths: list
     document: object = field(repr=False)
     config: dict = field(repr=False)
 

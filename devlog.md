@@ -68,3 +68,15 @@ A dated log of how Questionbank Forge was built. See the [README](README.md) for
 - Added an empty question check to the validator. Any question whose text is blank, or contains only its number, is flagged along with that question number.
 - Added split and merged question checks. A question with no marker in its text is flagged as split, and a question containing two or more markers is flagged as merged. To support these, `WorksheetReport` now also stores each question's number, text and regions as lists.
 - Added a lost words check, which has been the most common error so far. The first approach compared the page height with the total height of the questions on it, but this was inconsistent. The check now looks for words that sit above the footer cutoff but outside every question region on their page, and flags them with the page and y-position. This required storing the full document on the worksheet report.
+
+15/11:
+- Generalised the validator patterns. Some of them (for example the blank check and the numbering chain) assumed the `1.` marker format, so other markers such as `1:` were not fully supported.
+- Fixed a false positive in the lost words check, which occurred when question content sat slightly higher on the page than its marker. The check now compares the midpoint of each word with the question region rather than its top edge.
+- Changed the counter and stripper functions in `validate.py` to work on whole lines instead of lists of words. Working on words made the marks pattern difficult to adjust.
+- Reworked `is_sequential` so that the sequence resets when a 1 is found, as some worksheets restart their numbering but are still sequential.
+- Applied the header cutoff in the splitter, so that header text is no longer included in a question.
+- Added the `LAST_PAGE_FOOTER` option for PDFs whose final page ends with extra content, and applied it in both the splitter and the validator.
+- Added an image check to the validator, which flags questions whose saved image is missing or shared with another question. This required storing image paths on the worksheet report.
+- Extended the lost words check to respect the header and footer cutoffs, which removes further false positives.
+- Moved shared functions into `helpers.py`.
+- Shortened the lost words function to make it easier to read when debugging.
