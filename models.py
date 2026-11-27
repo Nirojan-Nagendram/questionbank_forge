@@ -1,5 +1,15 @@
 from dataclasses import dataclass, field
 
+""" Temp storage for open questions during splitting."""
+
+
+@dataclass(frozen=True)  # replaces rather than saves
+class Open_question:
+    page_idx: int
+    number: str
+    y: float
+
+
 """A printable class for all features of a question."""
 
 

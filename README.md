@@ -57,6 +57,7 @@ The dated log of how the project was built, with the decisions and bugs along th
 - The stripped question numbers are recalculated in several places (the validator and renderer). They should be computed once, when the `Question` is created, and stored as a field on the class. This would also remove the repeated `strip_number` calls in `validate.py`.
 - marks pattern currently checks for "marks)" rather than the marks number, Strip chain function would be simpler (identical run method) if it used the number ie. "(3 marks)" = "3"
 - validator and splitter use different methods of cutting footers one takes it away from page height other just find footer point and cuts it. Pick one and make it universal.
+- `write_output` in `question_splitter.py` is broken and is not used. It should be fixed or removed.
 
 ## Future plans
 - The splitter is not universal, so each new worksheet type needs its conditions adjusting.

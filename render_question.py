@@ -6,6 +6,7 @@ from PIL import Image
 
 def make_fold(folder):
     path = "images/" + folder
+    print(path)
     if not os.path.exists(path):
         # print("does not exist")
         os.mkdir(path)

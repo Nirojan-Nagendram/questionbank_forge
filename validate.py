@@ -7,7 +7,7 @@ import logging
 import os
 from models import WorksheetReport
 from utility import pdf
-from helpers import find_footer_limit, strip_chain
+from helpers import find_footer_limit, strip_chain, group_line
 
 logging.basicConfig(level=logging.DEBUG)
 validator_logger = logging.getLogger("validator")
@@ -314,18 +314,6 @@ def select_failure_mode(report):
     return flags or [("NONE", None)]
 
 
-def group_line(page):
-    lines = {}
-    for w in page.get_text("words"):
-        # sets line by adding word with block_no, line_no
-        lines.setdefault((w[5], w[6]), []).append(w)
-    for words in lines.values():
-        # Sorts by word no
-        words.sort(key=lambda w: w[7])
-        # generator yielding lines and line info every pass
-        yield " ".join(w[4] for w in words), words
-
-
 def count_matches(document, pattern, SKIP_PAGE_ONE):
     # Number of "marks)" or "1." etc on across all pages or question numbers found anywhere on page.
     regex = re.compile(pattern)
@@ -336,7 +324,7 @@ def count_matches(document, pattern, SKIP_PAGE_ONE):
             if page_idx == 0:
                 continue
         question_details = []
-        for line_text, line_w in group_line(page):
+        for line_text, line_w in group_line(page.get_text("words")):
             # x0, y0, x1, y1, text, block_no, line_no, word_no = w
             if regex.search(line_text):
                 question_details.append(
@@ -399,7 +387,8 @@ def save_validation(report):
         flag_writer = csv.writer(
             csvfile, delimiter=" ", quotechar="|", quoting=csv.QUOTE_MINIMAL
         )
-        flag_writer.writerow([report.name, report.flag])
+        for flag_type, detail in report.flag:
+            flag_writer.writerow([report.name, flag_type, detail])
 
 
 def validate_on_sheet(name, document, config, question_list):
@@ -436,7 +425,7 @@ def validate_on_sheet(name, document, config, question_list):
         save_validation(report)
         for name, *details in report.flag:
             # continue
-            print(f"\n{name}")
+            print(f"{name}\n")
             for d in details:
                 print(d)
 

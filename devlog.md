@@ -80,3 +80,13 @@ A dated log of how Questionbank Forge was built. See the [README](README.md) for
 - Extended the lost words check to respect the header and footer cutoffs, which removes further false positives.
 - Moved shared functions into `helpers.py`.
 - Shortened the lost words function to make it easier to read when debugging.
+
+27/11:
+- Rebuilt `question_splitter.py`. Detecting questions by a fixed left margin was too rigid, so questions are now found by searching each line for the question marker pattern.
+- Used the rebuild to make the splitter more robust and to handle more cases. These changes made a big difference with little to no examples of missing words during testing. 
+- Split the splitter into several smaller functions and added Open_question to `models.py` , which makes it easier to read, debug and extend.
+- Added a sequential rule for question numbers, so that stray matches of the marker pattern are ignored.
+- The splitter now runs page by page.
+- Added an automatic reset to the sequential rule for when a worksheet restarts its question numbering.
+- Removed the need to pass the open document into the splitter.
+- Added `fake_data.txt`, a small set of made-up page records. It lets the sequential rule and the region calculation be tested without a real worksheet.
